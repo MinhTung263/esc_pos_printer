@@ -1,15 +1,8 @@
-import 'dart:io';
-import 'dart:typed_data';
-import 'package:intl/intl.dart';
-import 'package:qr_flutter/qr_flutter.dart';
-import 'package:path_provider/path_provider.dart';
-import 'package:flutter/material.dart' hide Image;
 import 'package:esc_pos_printer/esc_pos_printer.dart';
+import 'package:esc_pos_utils_plus/esc_pos_utils_plus.dart';
+import 'package:flutter/material.dart' hide Image;
 import 'package:flutter/services.dart';
-import 'package:ping_discover_network/ping_discover_network.dart';
-import 'package:esc_pos_utils/esc_pos_utils.dart';
 import 'package:image/image.dart';
-import 'package:wifi/wifi.dart';
 
 void main() => runApp(MyApp());
 
@@ -37,60 +30,6 @@ class _MyHomePageState extends State<MyHomePage> {
   bool isDiscovering = false;
   int found = -1;
   TextEditingController portController = TextEditingController(text: '9100');
-
-  void discover(BuildContext ctx) async {
-    setState(() {
-      isDiscovering = true;
-      devices.clear();
-      found = -1;
-    });
-
-    String ip;
-    try {
-      ip = await Wifi.ip;
-      print('local ip:\t$ip');
-    } catch (e) {
-      final snackBar = SnackBar(
-          content: Text('WiFi is not connected', textAlign: TextAlign.center));
-      Scaffold.of(ctx).showSnackBar(snackBar);
-      return;
-    }
-    setState(() {
-      localIp = ip;
-    });
-
-    final String subnet = ip.substring(0, ip.lastIndexOf('.'));
-    int port = 9100;
-    try {
-      port = int.parse(portController.text);
-    } catch (e) {
-      portController.text = port.toString();
-    }
-    print('subnet:\t$subnet, port:\t$port');
-
-    final stream = NetworkAnalyzer.discover2(subnet, port);
-
-    stream.listen((NetworkAddress addr) {
-      if (addr.exists) {
-        print('Found device: ${addr.ip}');
-        setState(() {
-          devices.add(addr.ip);
-          found = devices.length;
-        });
-      }
-    })
-      ..onDone(() {
-        setState(() {
-          isDiscovering = false;
-          found = devices.length;
-        });
-      })
-      ..onError((dynamic e) {
-        final snackBar = SnackBar(
-            content: Text('Unexpected exception', textAlign: TextAlign.center));
-        Scaffold.of(ctx).showSnackBar(snackBar);
-      });
-  }
 
   Future<void> testReceipt(NetworkPrinter printer) async {
     printer.text(
@@ -136,8 +75,10 @@ class _MyHomePageState extends State<MyHomePage> {
     // Print image
     final ByteData data = await rootBundle.load('assets/logo.png');
     final Uint8List bytes = data.buffer.asUint8List();
-    final Image image = decodeImage(bytes);
-    printer.image(image);
+    final Image? image = decodeImage(bytes);
+    if (image != null) {
+      printer.image(image);
+    }
     // Print image using alternative commands
     // printer.imageRaster(image);
     // printer.imageRaster(image, imageFn: PosImageFn.graphics);
@@ -161,8 +102,10 @@ class _MyHomePageState extends State<MyHomePage> {
     // Print image
     final ByteData data = await rootBundle.load('assets/rabbit_black.jpg');
     final Uint8List bytes = data.buffer.asUint8List();
-    final Image image = decodeImage(bytes);
-    printer.image(image);
+    final Image? image = decodeImage(bytes);
+    if (image != null) {
+      printer.image(image);
+    }
 
     printer.text('GROCERYLY',
         styles: PosStyles(
@@ -269,12 +212,6 @@ class _MyHomePageState extends State<MyHomePage> {
     printer.text('Thank you!',
         styles: PosStyles(align: PosAlign.center, bold: true));
 
-    final now = DateTime.now();
-    final formatter = DateFormat('MM/dd/yyyy H:m');
-    final String timestamp = formatter.format(now);
-    printer.text(timestamp,
-        styles: PosStyles(align: PosAlign.center), linesAfter: 2);
-
     // Print QR Code from image
     // try {
     //   const String qrData = 'example.com';
@@ -317,10 +254,6 @@ class _MyHomePageState extends State<MyHomePage> {
       // await testReceipt(printer);
       printer.disconnect();
     }
-
-    final snackBar =
-        SnackBar(content: Text(res.msg, textAlign: TextAlign.center));
-    Scaffold.of(ctx).showSnackBar(snackBar);
   }
 
   @override
@@ -347,10 +280,6 @@ class _MyHomePageState extends State<MyHomePage> {
                 SizedBox(height: 10),
                 Text('Local ip: $localIp', style: TextStyle(fontSize: 16)),
                 SizedBox(height: 15),
-                RaisedButton(
-                    child: Text(
-                        '${isDiscovering ? 'Discovering...' : 'Discover'}'),
-                    onPressed: isDiscovering ? null : () => discover(context)),
                 SizedBox(height: 15),
                 found >= 0
                     ? Text('Found: $found device(s)',
